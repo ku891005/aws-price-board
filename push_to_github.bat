@@ -28,14 +28,25 @@ git config --global user.email "%GE%"
 
 :askrepo
 echo.
+git remote get-url origin >nul 2>&1
+if errorlevel 1 goto needrepo
+for /f "tokens=*" %%r in ('git remote get-url origin') do set REPO=%%r
+echo [정보] 등록된 리포지토리: %REPO%
+echo        그대로 쓰려면 엔터, 바꾸려면 새 주소를 입력하세요.
+set /p NEWREPO="  주소 (엔터=유지): "
+if not "%NEWREPO%"=="" set REPO=%NEWREPO%
+goto haverepo
+
+:needrepo
 echo [입력] GitHub 리포지토리 주소를 붙여넣으세요.
 echo        리포 페이지의 초록색 Code 버튼에서 HTTPS 주소를 복사하면 됩니다.
 echo        형식 예시: https://github.com/limsome/aws-price-board.git
 set /p REPO="  주소: "
 if "%REPO%"=="" goto norepo
 
+:haverepo
 echo.
-echo [1/5] git init
+echo [1/6] git init
 if exist ".git" goto skipinit
 git init
 if errorlevel 1 goto fail
@@ -45,11 +56,11 @@ goto addall
 echo       이미 초기화되어 있습니다. 건너뜁니다.
 
 :addall
-echo [2/5] git add .
+echo [2/6] git add .
 git add .
 if errorlevel 1 goto fail
 
-echo [3/5] git commit
+echo [3/6] git commit
 git diff --cached --quiet
 if not errorlevel 1 goto nochange
 git commit -m "AWS 단가 게시판 업데이트"
@@ -57,46 +68,83 @@ if errorlevel 1 goto fail
 goto setremote
 
 :nochange
-echo       변경 사항이 없습니다. 건너뜁니다.
+echo       새로 담을 변경 사항이 없습니다. 건너뜁니다.
 
 :setremote
-echo [4/5] 브랜치 main 설정 및 원격 등록
+echo [4/6] 브랜치 main 설정 및 원격 등록
 git branch -M main
 git remote get-url origin >nul 2>&1
 if errorlevel 1 goto addremote
 git remote set-url origin "%REPO%"
-goto dopush
+goto sync
 
 :addremote
 git remote add origin "%REPO%"
 if errorlevel 1 goto fail
 
-:dopush
-echo [5/5] git push
+:sync
+echo [5/6] 원격 변경 사항 가져오기
+echo       (자동 갱신 워크플로우가 만든 커밋을 먼저 합칩니다)
+git fetch origin main >nul 2>&1
+if errorlevel 1 goto firstpush
+git rev-parse --verify origin/main >nul 2>&1
+if errorlevel 1 goto firstpush
+git pull --rebase origin main
+if errorlevel 1 goto conflict
+
+:firstpush
+echo [6/6] git push
 echo       브라우저 로그인 창이 뜨면 GitHub 계정으로 로그인하세요.
 git push -u origin main
-if errorlevel 1 goto fail
+if errorlevel 1 goto pushfail
 
 echo.
 echo ==================================================================
 echo  업로드 완료
 echo.
-echo  이제 GitHub 웹에서 두 가지를 설정하세요.
+echo  사이트에 반영되기까지 1~6분 걸립니다.
+echo  Actions 탭에서 진행 상황을 볼 수 있습니다.
 echo.
-echo   1) Settings - Pages - Build and deployment - Source 를
-echo      "GitHub Actions" 로 변경
-echo   2) Settings - Actions - General - Workflow permissions 를
-echo      "Read and write permissions" 로 변경 후 Save
-echo.
-echo  그 다음 Actions 탭에서 Update AWS prices 를 선택하고
-echo  Run workflow 를 실행하세요. 3~6분 걸립니다.
-echo.
-echo  완료되면 접속 주소는 다음과 같습니다.
-echo    https://[계정].github.io/aws-price-board/
+echo  접속 주소
+echo    https://ku891005.github.io/aws-price-board/
 echo ==================================================================
 echo.
 pause
 exit /b 0
+
+:conflict
+echo.
+echo ==================================================================
+echo  같은 파일을 로컬과 원격에서 함께 수정해 충돌이 났습니다.
+echo.
+echo  원격(GitHub) 내용을 기준으로 맞추려면 아래를 실행하세요.
+echo    git rebase --abort
+echo    git reset --hard origin/main
+echo  단, 이 경우 로컬에서만 수정한 내용은 사라집니다.
+echo.
+echo  판단이 어려우면 이 화면을 그대로 전달해 주세요.
+echo ==================================================================
+echo.
+pause
+exit /b 1
+
+:pushfail
+echo.
+echo ==================================================================
+echo  push 가 거부되었습니다.
+echo.
+echo  rejected / fetch first 가 보이면 원격에 새 커밋이 있다는 뜻입니다.
+echo  이 배치 파일을 한 번 더 실행하면 자동으로 합친 뒤 다시 올립니다.
+echo.
+echo  Authentication failed 가 보이면 토큰이 필요합니다.
+echo    Settings - Developer settings - Personal access tokens
+echo    - Tokens classic - Generate new token
+echo    - repo 와 workflow 권한 체크 후 생성
+echo    - 비밀번호 입력 자리에 붙여넣기
+echo ==================================================================
+echo.
+pause
+exit /b 1
 
 :nogit
 echo [오류] git 을 찾을 수 없습니다.
@@ -116,22 +164,6 @@ exit /b 1
 echo.
 echo ==================================================================
 echo  실패했습니다. 위의 마지막 오류 메시지를 확인하세요.
-echo.
-echo  자주 나오는 원인
-echo.
-echo   Authentication failed
-echo     비밀번호 대신 Personal Access Token 이 필요합니다.
-echo     Settings - Developer settings - Personal access tokens
-echo     - Tokens classic - Generate new token
-echo     - repo 와 workflow 권한을 체크하고 생성한 뒤
-echo     비밀번호 입력 자리에 붙여넣으세요.
-echo.
-echo   refusing to merge unrelated histories
-echo     리포지토리 생성 시 README 를 추가한 경우입니다.
-echo     git pull --rebase origin main 을 실행한 뒤 다시 시도하세요.
-echo.
-echo   repository not found
-echo     주소 오타이거나 해당 리포에 접근 권한이 없습니다.
 echo ==================================================================
 echo.
 pause
