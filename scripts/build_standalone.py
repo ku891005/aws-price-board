@@ -33,6 +33,30 @@ def load(name):
         return json.load(f)
 
 
+def inline_icons(html):
+    """<link rel=icon ...> 들을 SVG data URI 한 쌍으로 교체."""
+    import re
+    import urllib.parse
+
+    def uri(name):
+        path = os.path.join(ROOT, "docs", name)
+        if not os.path.isfile(path):
+            return None
+        with open(path, encoding="utf-8") as f:
+            svg = re.sub(r"\s+", " ", f.read()).strip()
+        return "data:image/svg+xml," + urllib.parse.quote(svg, safe="/:;=,()#'")
+
+    fav, touch = uri("favicon.svg"), uri("icon-192.svg")
+    if not fav:
+        return html
+    block = f'<link rel="icon" type="image/svg+xml" href="{fav}">\n'
+    if touch:
+        block += f'<link rel="apple-touch-icon" href="{touch}">\n'
+    html = re.sub(r'(<!-- 파비콘[^\n]*\n)?(<link rel="(?:icon|apple-touch-icon)"[^\n]*\n)+',
+                  block, html, count=1)
+    return html
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(ROOT, "aws-price-board-standalone.html"))
@@ -60,6 +84,9 @@ def main():
     # </script> 문자열이 데이터에 있으면 HTML 파싱이 깨지므로 이스케이프
     blob = blob.replace("</", "<\\/")
     html = html.replace(MARKER, "window.__DATA__ = " + blob + ";")
+
+    # 파비콘 인라인화: 단일 파일은 옆에 아이콘 파일이 없으므로 data URI 로 심는다
+    html = inline_icons(html)
 
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(html)
