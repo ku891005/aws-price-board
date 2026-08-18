@@ -1,1 +1,1 @@
-{"region":"ap-northeast-2","regionName":"서울","notCollected":["ec2"],"updatedAt":"2026-08-18T04:44:46+00:00","hoursPerMonth":730.0,"unbundled":["m7i","r7i","m8i","r8i","m8a","r8a"],"counts":{"rds":3836,"ec2":0,"rdsStorage":634},"source":"AWS Price List Bulk API (public)"}
+{"region":"ap-northeast-2","regionName":"서울","notCollected":[],"updatedAt":"2026-08-18T06:29:31+00:00","hoursPerMonth":730.0,"unbundled":["m7i","r7i","m8i","r8i","m8a","r8a"],"counts":{"rds":3852,"ec2":21241,"rdsStorage":583},"source":"AWS Price List Bulk API (public)"}
