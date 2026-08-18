@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWS 인스턴스 단가 비교 · 서울 리전</title>
+<style>
+  :root{
+    --bg:#fbfbfc; --panel:#fff; --panel2:#f4f5f7; --line:#e3e6ea; --line2:#eef0f3;
+    --tx:#1b1f24; --tx2:#697280; --acc:#2f6fed; --accs:#eaf1fe; --ok:#0f9d63;
+    --byol:#7c3aed; --byom:#db2777; --hdr:#fff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#0f1216; --panel:#161a20; --panel2:#1d222a; --line:#2a3039; --line2:#232830;
+           --tx:#e8ebf0; --tx2:#98a2b1; --accs:#17243d; --hdr:#161a20; }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--tx);font:13px/1.45 -apple-system,BlinkMacSystemFont,
+       "Segoe UI","Noto Sans KR",Roboto,sans-serif;display:flex;flex-direction:column}
+  a{color:var(--acc)}
+
+  /* ── top nav ── */
+  .nav{display:flex;align-items:center;gap:4px;padding:0 14px;height:46px;
+       background:var(--hdr);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .brand{font-weight:700;font-size:14px;margin-right:12px;letter-spacing:-.2px;white-space:nowrap}
+  .brand small{font-weight:500;color:var(--tx2)}
+  .nav .sp{flex:1}
+  .navtab{padding:6px 12px;border-radius:7px;color:var(--tx2);cursor:pointer;
+          border:1px solid transparent;font-size:13px;white-space:nowrap}
+  .navtab:hover{background:var(--panel2)}
+  .navtab[aria-selected="true"]{background:var(--accs);color:var(--acc);
+          border-color:color-mix(in srgb,var(--acc) 30%,transparent);font-weight:600}
+  .upd{color:var(--tx2);font-size:11.5px;white-space:nowrap}
+
+  /* ── settings bar ── */
+  .settings{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;
+            padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;color:var(--tx2);letter-spacing:.3px;text-transform:uppercase}
+  select,input{padding:5px 8px;background:var(--panel);color:var(--tx);
+       border:1px solid var(--line);border-radius:6px;font-size:12.5px;font-family:inherit}
+  select:focus,input:focus{outline:2px solid var(--accs);border-color:var(--acc)}
+  .btn{padding:6px 11px;border:1px solid var(--line);background:var(--panel);color:var(--tx);
+       border-radius:6px;cursor:pointer;font-size:12.5px;white-space:nowrap}
+  .btn:hover{border-color:var(--acc);color:var(--acc)}
+  .btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+  .btn:disabled{opacity:.45;cursor:default}
+
+  /* ── search row ── */
+  .searchrow{display:flex;gap:8px;align-items:center;padding:9px 14px;background:var(--panel);
+             border-bottom:1px solid var(--line);flex-wrap:wrap}
+  #q{flex:1;min-width:240px;padding:7px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  #q.bad{border-color:#e5484d}
+  .hint{color:var(--tx2);font-size:11.5px}
+  .count{font-size:12.5px;color:var(--tx2);white-space:nowrap}
+
+  /* ── column popover ── */
+  .pop{position:relative}
+  .popbox{position:absolute;right:0;top:34px;z-index:40;background:var(--panel);
+          border:1px solid var(--line);border-radius:10px;padding:10px;min-width:250px;
+          max-height:340px;overflow:auto;box-shadow:0 12px 32px rgba(0,0,0,.16);display:none}
+  .popbox.on{display:block}
+  .popbox h4{margin:6px 4px;font-size:10.5px;color:var(--tx2);text-transform:uppercase;letter-spacing:.4px}
+  .chk{display:flex;align-items:center;gap:7px;padding:4px 5px;border-radius:6px;cursor:pointer;font-size:12.5px}
+  .chk:hover{background:var(--panel2)}
+  .chk input{width:14px;height:14px;padding:0}
+
+  /* ── table ── */
+  .wrap{flex:1;overflow:auto;background:var(--panel);margin:0}
+  table{border-collapse:separate;border-spacing:0;width:100%;
+        font-variant-numeric:tabular-nums;font-size:12.5px}
+  thead th{position:sticky;top:0;z-index:3;background:var(--panel2);text-align:left;
+           padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;
+           font-size:11px;color:var(--tx2);text-transform:uppercase;letter-spacing:.35px;
+           white-space:nowrap;user-select:none}
+  thead th:hover{color:var(--acc)}
+  thead th.grp{text-align:center;text-transform:none;font-size:11px;letter-spacing:0;
+               cursor:default;color:var(--tx);font-weight:700;border-left:1px solid var(--line);
+               background:var(--panel2);top:0}
+  tbody td{padding:6px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+  tbody tr:hover td{background:var(--accs)}
+  tr.sel td{background:var(--accs)}
+  td.num,th.num{text-align:right}
+  td.gsep,th.gsep{border-left:1px solid var(--line)}
+  td.name{font-weight:600}
+  td.api{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--tx2)}
+  .sticky1{position:sticky;left:0;z-index:2;background:var(--panel);border-right:1px solid var(--line)}
+  thead .sticky1{z-index:5;background:var(--panel2)}
+  tbody tr:hover .sticky1{background:var(--accs)}
+  tr.sel .sticky1{background:var(--accs)}
+  .cell-na{color:var(--tx2)}
+  .lic{display:inline-block;padding:0 5px;border-radius:4px;font-size:10px;font-weight:700;
+       color:#fff;vertical-align:1px}
+  .lic-byol{background:var(--byol)} .lic-byom{background:var(--byom)}
+  .sep{color:var(--warn,#c2410c);font-weight:700;cursor:help}
+  .best{color:var(--ok)}
+  .empty{padding:48px;text-align:center;color:var(--tx2)}
+  .foot{display:flex;gap:10px;align-items:center;justify-content:center;padding:10px;
+        border-top:1px solid var(--line);background:var(--panel);color:var(--tx2);font-size:12px}
+  .note{padding:10px 14px 24px;color:var(--tx2);font-size:11.5px;line-height:1.7;background:var(--bg)}
+  #banner{display:none;margin:0;padding:12px 14px;background:#fff4e5;color:#7c2d12;
+          border-bottom:1px solid #fdba74;font-size:12.5px;line-height:1.7}
+  #banner code{background:rgba(0,0,0,.07);padding:1px 5px;border-radius:4px;
+               font-family:ui-monospace,Menlo,monospace}
+  @media (prefers-color-scheme: dark){ #banner{background:#3b2a12;color:#fed7aa;border-color:#7c4a10} }
+
+  /* ── 갱신 모달 ── */
+  .modalbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;
+           align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+  .modalbg.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+         width:min(760px,100%);box-shadow:0 24px 60px rgba(0,0,0,.3)}
+  .mhead{display:flex;align-items:center;gap:10px;padding:14px 16px;
+         border-bottom:1px solid var(--line);font-size:14px}
+  .mbody{padding:6px 16px 18px}
+  .mstep{padding:14px 0;border-bottom:1px solid var(--line2)}
+  .mstep:last-child{border-bottom:0}
+  .mstep h4{margin:0 0 6px;font-size:12.5px;color:var(--tx)}
+  .mnote{margin:4px 0 8px;color:var(--tx2);font-size:12px;line-height:1.65}
+  .mrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .mbody code,#cmd{background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+        padding:1px 5px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+  #cmd{display:block;padding:9px 11px;white-space:pre;overflow:auto;margin:6px 0}
+  .drop{margin-top:8px;padding:16px;border:1.5px dashed var(--line);border-radius:10px;
+        text-align:center;color:var(--tx2);font-size:12px}
+  .drop.hot{border-color:var(--acc);background:var(--accs);color:var(--acc)}
+  .ok{color:var(--ok);font-weight:600}
+  .err{color:#e5484d;font-weight:600}
+  .prog{height:6px;border-radius:99px;background:var(--panel2);overflow:hidden;
+        flex:1;min-width:140px}
+  .prog i{display:block;height:100%;background:var(--acc);width:0}
+  .dlline{display:flex;align-items:center;gap:8px;width:100%;font-size:12px}
+  .dlline b{min-width:36px;color:var(--tx)}
+  .dlline .mnote{margin:0;display:flex;align-items:center;gap:8px;flex:1}
+  /* 갱신 진행 중에는 방법 1(진행 상황)만 노출 */
+  .modal.busy #step2, .modal.busy #step3, .modal.busy #savestep,
+  .modal.busy #step1 .mrow:last-of-type{display:none !important}
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:200;
+         background:var(--tx);color:var(--panel);padding:10px 16px;border-radius:10px;
+         font-size:12.5px;box-shadow:0 10px 30px rgba(0,0,0,.28);opacity:0;
+         transition:opacity .25s, transform .25s;pointer-events:none}
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(-4px)}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <span class="brand">AWS 인스턴스 단가 비교 <small>· 서울 (ap-northeast-2)</small></span>
+  <span class="navtab" role="tab" data-view="rds" aria-selected="true">RDS</span>
+  <span class="navtab" role="tab" data-view="ec2" aria-selected="false">EC2</span>
+  <span class="navtab" role="tab" data-view="storage" aria-selected="false">RDS 스토리지</span>
+  <span class="sp"></span>
+  <span class="upd" id="upd"></span>
+</div>
+
+<div id="banner"></div>
+<div class="settings" id="settings"></div>
+
+<div class="searchrow">
+  <input id="q" placeholder='검색 / 표현식:  vcpu >= 8 and memory < 64 and name ~ r6g'>
+  <span class="count" id="count"></span>
+  <button class="btn" id="cmp" disabled>비교 0</button>
+  <div class="pop">
+    <button class="btn" id="colbtn">컬럼 ▾</button>
+    <div class="popbox" id="colbox"></div>
+  </div>
+  <button class="btn" id="csv">내보내기</button>
+  <button class="btn" id="refresh">데이터 갱신</button>
+  <button class="btn" id="clear">필터 초기화</button>
+</div>
+
+<!-- ── 데이터 갱신 모달 ── -->
+<div id="modalbg" class="modalbg">
+  <div class="modal">
+    <div class="mhead">
+      <b>데이터 갱신</b>
+      <span style="flex:1"></span>
+      <button class="btn" id="mclose">닫기</button>
+    </div>
+    <div class="mbody">
+      <p class="mnote">
+        AWS Price List Bulk API(공개 엔드포인트)에서 서울 리전 가격표를 받아 이 화면을 다시 만듭니다.
+        AWS 자격증명은 필요하지 않습니다.
+      </p>
+
+      <div class="mstep" id="step1">
+        <h4>방법 1 · 브라우저에서 직접 받기</h4>
+        <p class="mnote">
+          가격표는 RDS 약 17MB, EC2 약 100MB 이상입니다. 창을 열면 RDS → EC2 순서로
+          자동 진행되며, 중간에 중단할 수 있습니다.
+        </p>
+        <div class="mrow">
+          <button class="btn pri" id="dlall">RDS + EC2 한번에 받기</button>
+          <button class="btn" id="dlstop" style="display:none">중단</button>
+          <span id="dlall_stat" class="mnote"></span>
+        </div>
+        <div class="mrow" style="margin-top:6px">
+          <span class="prog" style="width:100%"><i id="dlall_bar"></i></span>
+        </div>
+        <div class="mrow" style="margin-top:8px">
+          <span id="dl_rds_row" class="dlline"><b>RDS</b> <span id="dlstat_rds" class="mnote">대기</span></span>
+        </div>
+        <div class="mrow">
+          <span id="dl_ec2_row" class="dlline"><b>EC2</b> <span id="dlstat_ec2" class="mnote">대기</span></span>
+        </div>
+        <!-- 개별 받기 (재활용을 위해 유지) -->
+        <div class="mrow" style="margin-top:10px">
+          <span class="mnote">개별로 받기:</span>
+          <button class="btn" data-dl="rds">RDS만</button>
+          <button class="btn" data-dl="ec2">EC2만</button>
+          <span id="dlstat" class="mnote"></span>
+        </div>
+      </div>
+
+      <div class="mstep" id="step2">
+        <h4>방법 2 · 내려둔 가격표 파일에서 불러오기</h4>
+        <p class="mnote">
+          이미 받아둔 원본 가격표(<code>_pricelist_rds_ap-northeast-2.json</code> 같은
+          AWS <code>index.json</code>)나, 이 도구가 만든 <code>rds.json</code>·<code>ec2.json</code>을
+          선택하면 브라우저 안에서 다시 파싱합니다. 파일은 어디로도 전송되지 않습니다.
+        </p>
+        <div class="mrow">
+          <label class="btn" for="fileinput">파일 선택…</label>
+          <input id="fileinput" type="file" accept=".json" multiple hidden>
+          <span id="filestat" class="mnote"></span>
+        </div>
+        <div id="drop" class="drop">이 영역에 JSON 파일을 끌어다 놓아도 됩니다</div>
+      </div>
+
+      <div class="mstep" id="step3">
+        <h4>방법 3 · 파이썬 수집기로 갱신 (권장)</h4>
+        <p class="mnote">리포지토리 폴더에서 아래를 실행하면 RDS·EC2 전부 갱신되고 단일 파일까지 다시 만듭니다.</p>
+        <pre id="cmd">python scripts/collect_prices.py --refresh --xlsx
+python scripts/build_standalone.py</pre>
+        <div class="mrow"><button class="btn" id="copycmd">명령 복사</button></div>
+      </div>
+
+      <div class="mstep" id="savestep" style="display:none">
+        <h4>갱신 결과 저장</h4>
+        <p class="mnote">
+          지금 화면의 데이터를 그대로 담은 단일 HTML을 내려받습니다.
+          기존 <code>aws-price-board-standalone.html</code> 을 이 파일로 바꾸면 다음에 열 때도 유지됩니다.
+        </p>
+        <div class="mrow">
+          <button class="btn pri" id="savehtml">단일 파일로 저장</button>
+          <button class="btn" id="savejson">JSON으로 저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+<div class="foot" id="foot"></div>
+
+<div class="note" id="note"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* 단일 파일(standalone) 빌드 시 이 자리에 데이터가 삽입됩니다.
+   비어 있으면 같은 폴더의 data/*.json 을 fetch 합니다. */
+window.__DATA__ = null;
+/*__EMBED__*/
+</script>
+
+<script>
+"use strict";
+/* ─────────── 상수 ─────────── */
+const DUR = { hour:{l:"시간당",f:1}, day:{l:"일",f:24}, month:{l:"월 (730h)",f:730}, year:{l:"연 (8760h)",f:8760} };
+const TERM = { od:"온디맨드", ri1:"RI 1년 (Standard)", ri3:"RI 3년 (Standard)" };
+/* RI 구매 옵션은 요금 조건이 아니라 '열'로 펼친다 */
+const PO      = { nu:"No Upfront", pu:"Partial Upfront", au:"All Upfront" };
+const PO_KEYS = ["nu", "pu", "au"];
+/* 데이터 필드 키: 온디맨드는 od, RI는 ri1nu / ri3au ... */
+const pkey = (term, po) => term === "od" ? "od" : term + po;
+const poCols = () => S.term === "od" ? [""] : PO_KEYS;
+/* 라이선스 모델을 열 이름에 포함시켜 어느 것도 가려지지 않게 한다 */
+const LIC_ABBR = { "License Included":"LI", "BYOL":"BYOL", "BYOM":"BYOM",
+                   "Marketplace":"MP", "No License Required":"", "N/A":"" };
+const LIC_ORDER = ["", "LI", "BYOL", "BYOM", "MP"];
+/* 라이선스 모델 좁히기: License Include 선택 시 '라이선스 불필요' 엔진도 포함 */
+function licMatch(lic){
+  if (S.lic === "all") return true;
+  if (S.lic === "License Included")
+    return lic === "License Included" || lic === "No License Required" || lic === "N/A";
+  return lic === S.lic;
+}
+const CUR = { USD:{s:"$",r:1}, KRW:{s:"₩",r:null} };
+
+/* RDS 열 순서: Vantage처럼 엔진/에디션 단위로 펼침 */
+const RDS_ORDER = [
+  "MySQL", "PostgreSQL", "MariaDB",
+  "Aurora MySQL", "Aurora PostgreSQL",
+  "SQL Server Express", "SQL Server Web", "SQL Server Standard", "SQL Server Enterprise",
+  "SQL Server Standard Developer", "SQL Server Enterprise Developer",
+  "Oracle Standard Two", "Oracle Enterprise",
+  "Db2 Community", "Db2 Standard", "Db2 Advanced",
+];
+const EC2_ORDER = ["Linux", "Windows", "RHEL", "SUSE", "Ubuntu Pro", "Red Hat Enterprise Linux with HA"];
+
+/* ─────────── 상태 ─────────── */
+const S = {
+  view:"rds",
+  raw:{}, meta:{},
+  term:"od", dur:"hour", cur:"USD", fx:1380, prec:"auto",
+  deploy:"Single-AZ", lic:"all", product:"RDS",
+  sort:{k:"vcpu", dir:1},
+  q:"", page:1, per:150,
+  hidden:{},          // view -> Set(비활성 열 key)
+  sel:{},             // view -> Set(rowKey)
+  cmpOnly:false,
+};
+
+/* ─────────── 유틸 ─────────── */
+const S_ = v => S[v];
+const hiddenSet = () => (S.hidden[S.view] ||= new Set());
+const selSet    = () => (S.sel[S.view]    ||= new Set());
+
+function prettyName(it){   // db.r6g.2xlarge → R6g 2xlarge / db.r6i.xlarge.tpc2.mem4x → R6i xlarge tpc2 mem4x
+  const p = it.startsWith("db.") ? it.slice(3).split(".") : it.split(".");
+  if (!p.length) return it;
+  return p[0].charAt(0).toUpperCase() + p[0].slice(1) + (p.length > 1 ? " " + p.slice(1).join(" ") : "");
+}
+const memNum = m => parseFloat(String(m||"").replace(/[^0-9.]/g,"")) || 0;
+
+function baseVariantRDS(r){
+  const eng = r.engine || "";
+  const ed  = (r.edition && r.edition !== "-") ? r.edition : "";
+  if (eng.startsWith("Aurora")) return eng;
+  return (eng + (ed ? " " + ed : "")).trim();
+}
+/* 열 이름 = 엔진·에디션 + 라이선스 모델. 라이선스별 단가를 각각 볼 수 있게 한다. */
+function variantRDS(r){
+  const ab = LIC_ABBR[r.license] ?? r.license;
+  return baseVariantRDS(r) + (ab ? " · " + ab : "");
+}
+function variantEC2(r){
+  const ab = LIC_ABBR[r.license] ?? r.license;
+  return (r.os || "") + (ab && ab !== "LI" ? " · " + ab : "");
+}
+
+/* ─────────── 데이터 로드 & 피벗 ─────────── */
+const FILE = { rds:"data/rds.json", ec2:"data/ec2.json", storage:"data/rds_storage.json" };
+
+async function load(view){
+  if (S.raw[view]) return S.raw[view];
+  if (window.__DATA__ && window.__DATA__[view]){
+    S.raw[view] = window.__DATA__[view];
+    return S.raw[view];
+  }
+  try {
+    const res = await fetch(FILE[view]);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    S.raw[view] = await res.json();
+  } catch (e) {
+    S.raw[view] = [];
+    showLoadError(view, e);
+  }
+  return S.raw[view];
+}
+
+function showLoadError(view, e){
+  const isFile = location.protocol === "file:";
+  document.getElementById("banner").innerHTML =
+    `<b>데이터를 불러올 수 없습니다</b> (${FILE[view]} · ${e.message})<br>` +
+    (isFile
+      ? `이 페이지를 <code>file://</code> 로 직접 열었습니다. 브라우저가 로컬 파일 읽기를 차단합니다.<br>
+         해결: ① <b>단일 파일 버전</b>(<code>aws-price-board-standalone.html</code>)을 사용하거나,
+         ② <code>index.html</code> 과 <code>data/</code> 폴더를 같은 위치에 두고
+         <code>python -m http.server</code> 로 열거나, ③ GitHub Pages 로 배포해 접속하세요.`
+      : `<code>data/</code> 폴더에 <code>rds.json</code> · <code>ec2.json</code> ·
+         <code>rds_storage.json</code> · <code>meta.json</code> 이 있는지 확인하세요.
+         수집: <code>python scripts/collect_prices.py</code>`);
+  document.getElementById("banner").style.display = "block";
+}
+
+/* 인스턴스 1행 + 변형별 단가 셀 */
+function pivot(){
+  const rows = S.raw[S.view] || [];
+  const isRds = S.view === "rds";
+  const byInst = new Map();
+  const variants = new Set();
+
+  for (const r of rows){
+    if (isRds && r.product && r.product !== S.product) continue;
+    if (isRds && S.deploy && r.deployment !== S.deploy) continue;
+    if (!isRds && r.tenancy && r.tenancy !== "Shared") continue;
+    if (!isRds && r.preSw && r.preSw !== "NA") continue;
+
+    // 라이선스 모델은 열로 분리되므로, 여기서는 선택적 좁히기만 수행.
+    // License Include 선택 시 라이선스가 필요 없는 엔진(MySQL·PostgreSQL 등)도 함께 보여준다.
+    if (!licMatch(r.license)) continue;
+
+    const v = isRds ? variantRDS(r) : variantEC2(r);
+    if (!v) continue;
+    variants.add(v);
+
+    const key = r.instanceType;
+    let row = byInst.get(key);
+    if (!row){
+      row = { key, name:prettyName(key), api:key, family:r.family || key.split(".")[0],
+              vcpu:r.vcpu, memory:memNum(r.memory), storageTxt:"EBS only",
+              network:r.network || "-", processor:r.processor || "-", cells:{} };
+      byInst.set(key, row);
+    }
+    row.vcpu = row.vcpu || r.vcpu;
+    row.memory = row.memory || memNum(r.memory);
+    if (row.processor === "-") row.processor = r.processor || "-";
+
+    const cur = row.cells[v] || { lic:r.license, licSep:!!r.licSep };
+    for (const t of Object.keys(TERM)){
+      for (const po of (t === "od" ? [""] : PO_KEYS)){
+        const k = pkey(t, po);
+        const val = r[k];
+        if (val == null) continue;
+        if (cur[k] == null || val < cur[k]) cur[k] = val;
+      }
+    }
+    if (r.licSep) cur.licSep = true;
+    row.cells[v] = cur;
+  }
+
+  const order = isRds ? RDS_ORDER : EC2_ORDER;
+  const rank = name => {
+    const i = name.lastIndexOf(" · ");
+    const base = i === -1 ? name : name.slice(0, i);
+    const lic  = i === -1 ? "" : name.slice(i + 3);
+    const bi = order.indexOf(base);
+    const li = LIC_ORDER.indexOf(lic);
+    return [bi === -1 ? 999 : bi, base, li === -1 ? 9 : li];
+  };
+  const cols = [...variants].sort((a,b) => {
+    const ra = rank(a), rb = rank(b);
+    return ra[0] - rb[0] || ra[1].localeCompare(rb[1]) || ra[2] - rb[2];
+  });
+  return { rows:[...byInst.values()], cols };
+}
+
+/* ─────────── 열 정의 ─────────── */
+function baseCols(){
+  if (S.view === "storage") return [
+    {k:"family", t:"구분"}, {k:"type", t:"타입"}, {k:"engine", t:"엔진"},
+    {k:"deployment", t:"배포"}, {k:"price", t:"단가", num:true, price:true, raw:true},
+    {k:"unit", t:"단위"}, {k:"desc", t:"설명"},
+  ];
+  const c = [
+    {k:"name",      t:"Name", cls:"name", sticky:true},
+    {k:"api",       t:"API Name", cls:"api"},
+    {k:"family",    t:"Compute Family"},
+    {k:"memory",    t:"Memory", num:true, unit:" GiB"},
+    {k:"vcpu",      t:"vCPUs", num:true},
+    {k:"storageTxt",t:"Instance Storage"},
+    {k:"network",   t:"Network Performance"},
+    {k:"processor", t:"Processor", off:true},
+  ];
+  return c;
+}
+
+/* ─────────── 값 포맷 ─────────── */
+function money(hourly){
+  if (hourly == null) return null;
+  const f = DUR[S.dur].f;
+  const rate = S.cur === "KRW" ? S.fx : 1;
+  return hourly * f * rate;
+}
+function fmtMoney(v){
+  if (v == null) return null;
+  const sym = CUR[S.cur].s;
+  let d;
+  if (S.prec === "auto") d = S.cur === "KRW" ? 0 : (v < 1 ? 4 : v < 100 ? 3 : 2);
+  else d = Number(S.prec);
+  return sym + v.toLocaleString("ko-KR", {minimumFractionDigits:d, maximumFractionDigits:d});
+}
+
+/* ─────────── 표현식 검색 ─────────── */
+/* 지원: vcpu >= 8 and memory < 64 and name ~ r6g / api ~ graviton / or / () */
+function makeMatcher(q){
+  q = (q||"").trim();
+  if (!q) return () => true;
+  const looksExpr = /(>=|<=|>|<|==|!=|~)|\b(and|or)\b/i.test(q);
+  if (!looksExpr){
+    const t = q.toLowerCase();
+    return r => (r._hay ||= [r.name,r.api,r.family,r.processor,r.network,r.engine,r.type,r.desc]
+                  .filter(Boolean).join(" ").toLowerCase()).includes(t);
+  }
+  const FIELDS = ["vcpu","memory","name","api","family","processor","network","price"];
+  let js = q
+    .replace(/\band\b/gi, "&&").replace(/\bor\b/gi, "||")
+    .replace(/([a-zA-Z_]+)\s*~\s*("[^"]*"|'[^']*'|[\w.\-]+)/g,
+      (m, f, val) => `S_str(r.${f}).includes(${/^["']/.test(val)?val:JSON.stringify(val)}.toLowerCase())`)
+    .replace(/\b([a-zA-Z_]+)\b(?=\s*(>=|<=|==|!=|>|<))/g, (m,f) => FIELDS.includes(f) ? `S_num(r.${f})` : m);
+  try {
+    // eslint-disable-next-line no-new-func
+    const fn = new Function("r","S_num","S_str", `return (${js});`);
+    const num = v => typeof v === "number" ? v : parseFloat(v) || 0;
+    const str = v => String(v ?? "").toLowerCase();
+    fn({vcpu:0,memory:0,name:""}, num, str);       // 컴파일 검증
+    return r => { try { return !!fn(r, num, str); } catch { return false; } };
+  } catch { return null; }
+}
+
+/* ─────────── 렌더 ─────────── */
+function buildSettings(){
+  const box = document.getElementById("settings");
+  const sel = (id,label,obj,val,fmt) => `
+    <div class="fld"><label>${label}</label><select id="${id}">${
+      Object.entries(obj).map(([k,v]) =>
+        `<option value="${k}" ${k===val?"selected":""}>${fmt?fmt(v):v}</option>`).join("")
+    }</select></div>`;
+
+  let h = `<div class="fld"><label>리전</label>
+      <select disabled><option>서울 (ap-northeast-2)</option></select></div>`;
+
+  if (S.view !== "storage"){
+    h += sel("t_term","요금 조건",TERM,S.term);
+    h += sel("t_dur","비용 기간",Object.fromEntries(Object.entries(DUR).map(([k,v])=>[k,v.l])),S.dur);
+    if (S.view === "rds"){
+      h += sel("t_prod","제품",{"RDS":"RDS","RDS Custom":"RDS Custom"},S.product);
+      h += sel("t_dep","배포 옵션",{"Single-AZ":"Single-AZ","Multi-AZ":"Multi-AZ"},S.deploy);
+    }
+    h += sel("t_lic","라이선스 모델",
+      {all:"전체", "License Included":"License Include", BYOL:"BYOL", BYOM:"BYOM"}, S.lic);
+  }
+  h += sel("t_cur","통화",{USD:"USD ($)",KRW:"KRW (₩)"},S.cur);
+  h += `<div class="fld" id="fxwrap" style="${S.cur==="KRW"?"":"display:none"}">
+          <label>환율 ₩/$</label><input id="t_fx" type="number" step="10" value="${S.fx}" style="width:82px"></div>`;
+  h += sel("t_prec","정밀도",{auto:"Auto","0":"0자리","2":"2자리","4":"4자리","6":"6자리"},S.prec);
+  box.innerHTML = h;
+
+  const on = (id, fn) => { const e = document.getElementById(id); if (e) e.onchange = fn; };
+  on("t_term", e => { S.term = e.target.value; render(); });
+  on("t_dur",  e => { S.dur  = e.target.value; render(); });
+  on("t_dep",  e => { S.deploy = e.target.value; render(); });
+  on("t_prod", e => { S.product = e.target.value; render(); });
+  on("t_lic",  e => { S.lic  = e.target.value; render(); });
+  on("t_cur",  e => { S.cur  = e.target.value; buildSettings(); render(); });
+  on("t_prec", e => { S.prec = e.target.value; render(); });
+  const fxi = document.getElementById("t_fx");
+  if (fxi) fxi.oninput = e => { S.fx = Number(e.target.value)||0; render(); };
+}
+
+function buildColBox(cols, priceCols){
+  const box = document.getElementById("colbox");
+  const hs = hiddenSet();
+  const item = (k,t) => `<label class="chk"><input type="checkbox" data-c="${k}"
+      ${hs.has(k)?"":"checked"}><span>${t}</span></label>`;
+  box.innerHTML =
+    `<h4>기본 정보</h4>${cols.map(c => item(c.k, c.t)).join("")}` +
+    (priceCols.length ? `<h4>단가 열 (${TERM[S.term]})</h4>${priceCols.map(v => item("p:"+v, v)).join("")}` : "");
+  box.querySelectorAll("input[data-c]").forEach(i => i.onchange = () => {
+    i.checked ? hs.delete(i.dataset.c) : hs.add(i.dataset.c);
+    render();
+  });
+}
+
+function render(){
+  const isStorage = S.view === "storage";
+  const allBase = baseCols();
+  let rows, pcols = [];
+
+  if (isStorage){
+    rows = (S.raw.storage || []).map(r => ({...r, key:r.sku}));
+  } else {
+    const p = pivot();
+    rows = p.rows;
+    pcols = p.cols;
+  }
+
+  // 열 표시 여부
+  const shownBase  = allBase.filter(c => !hiddenSet().has(c.k));
+  const shownPrice = pcols.filter(v => !hiddenSet().has("p:"+v));
+  buildColBox(allBase, pcols);
+
+  // 검색
+  const m = makeMatcher(S.q);
+  const qEl = document.getElementById("q");
+  qEl.classList.toggle("bad", m === null);
+  let out = m ? rows.filter(m) : rows;
+
+  // 비교 모드
+  const sset = selSet();
+  if (S.cmpOnly) out = out.filter(r => sset.has(r.key));
+
+  // 정렬
+  const sk = S.sort.k, dir = S.sort.dir;
+  out = [...out].sort((a,b) => {
+    let x, y;
+    if (sk.startsWith("p:")){
+      const [v, po] = sk.slice(2).split("|");
+      const k = pkey(S.term, po || "");
+      x = a.cells?.[v]?.[k] ?? null;
+      y = b.cells?.[v]?.[k] ?? null;
+    } else { x = a[sk]; y = b[sk]; }
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    if (typeof x === "number" && typeof y === "number") return (x-y)*dir;
+    return String(x).localeCompare(String(y), "ko", {numeric:true})*dir;
+  });
+
+  const pages = Math.max(1, Math.ceil(out.length / S.per));
+  S.page = Math.min(S.page, pages);
+  const slice = out.slice((S.page-1)*S.per, S.page*S.per);
+
+  // ── thead
+  const arrow = k => S.sort.k===k ? (S.sort.dir>0?" ↑":" ↓") : "";
+  const pos = poCols();
+  const twoLevel = !isStorage && shownPrice.length && S.term !== "od";
+  let head = "";
+  if (twoLevel){
+    head += `<tr><th class="sticky1 grp" colspan="${shownBase.length+1}" style="text-align:left">
+        인스턴스 <span style="font-weight:400;color:var(--tx2)">·
+        ${TERM[S.term]} · ${DUR[S.dur].l} · ${S.cur}</span></th>` +
+      shownPrice.map(v => `<th class="grp" colspan="${pos.length}">${v}</th>`).join("") +
+      "</tr>";
+  }
+  head += "<tr>" +
+    `<th class="sticky1" style="width:28px"></th>` +
+    shownBase.map(c => `<th data-k="${c.k}" class="${c.num?"num":""}">${c.t}${arrow(c.k)}</th>`).join("") +
+    (isStorage ? "" : shownPrice.map(v => pos.map((po,i) => {
+      const k = `p:${v}|${po}`;
+      return `<th data-k="${k}" class="num${i===0?" gsep":""}">${
+        twoLevel ? PO[po] : v}${arrow(k)}</th>`;
+    }).join("")).join("")) +
+    "</tr>";
+  document.getElementById("thead").innerHTML = head;
+  document.querySelectorAll("#thead th[data-k]").forEach(th => th.onclick = () => {
+    const k = th.dataset.k;
+    S.sort = {k, dir: S.sort.k===k ? -S.sort.dir : (k==="name"||k==="api"||k==="family"?1:1)};
+    render();
+  });
+
+  // ── tbody
+  const cellHtml = (r, v, po, first) => {
+    const cls = "num" + (first ? " gsep" : "");
+    const c = r.cells?.[v];
+    if (!c) return `<td class="${cls} cell-na">–</td>`;
+    const p = c[pkey(S.term, po)];
+    if (p == null) return `<td class="${cls} cell-na" title="AWS가 이 조건의 요금을 공표하지 않음">–</td>`;
+    const sep = c.licSep ? `<span class="sep">*</span>` : "";
+    const tips = [];
+    if (S.term !== "od" && c.od) tips.push(`온디맨드 대비 ${(100*(1-(p/c.od))).toFixed(0)}% 절감`);
+    if (c.licSep) tips.push("라이선스 요금 별도 청구 (가격표 미공표) — 이 단가는 컴퓨팅 상당액");
+    const ti = tips.length ? ` title="${tips.join(" · ")}"` : "";
+    return `<td class="${cls}"${ti}>${fmtMoney(money(p))}${sep}</td>`;
+  };
+  const baseCell = (r,c) => {
+    let v = r[c.k];
+    if (c.price) v = fmtMoney(S.cur==="KRW" ? v*S.fx : v);
+    else if (v == null || v === "") v = `<span class="cell-na">–</span>`;
+    else if (c.num) v = Number(v).toLocaleString() + (c.unit||"");
+    return `<td class="${c.cls||""} ${c.num||c.price?"num":""} ${c.sticky?"sticky1":""}">${v}</td>`;
+  };
+
+  document.getElementById("tbody").innerHTML = slice.length ? slice.map(r => {
+    const on = sset.has(r.key);
+    return `<tr class="${on?"sel":""}">` +
+      `<td class="sticky1"><input type="checkbox" data-r="${r.key}" ${on?"checked":""}></td>` +
+      shownBase.map(c => baseCell(r,c)).join("") +
+      (isStorage ? "" : shownPrice.map(v =>
+        pos.map((po,i) => cellHtml(r,v,po,i===0)).join("")).join("")) +
+    "</tr>";
+  }).join("")
+  : `<tr><td class="empty" colspan="${shownBase.length+shownPrice.length*pos.length+1}">
+       ${m===null ? "표현식을 해석할 수 없습니다. 예: vcpu >= 8 and memory < 64" : "조건에 맞는 항목이 없습니다."}
+     </td></tr>`;
+
+  document.querySelectorAll("#tbody input[data-r]").forEach(i => i.onchange = () => {
+    i.checked ? sset.add(i.dataset.r) : sset.delete(i.dataset.r);
+    render();
+  });
+
+  // ── 하단 / 카운터
+  document.getElementById("count").textContent =
+    `${out.length.toLocaleString()} / ${rows.length.toLocaleString()} ${isStorage?"건":"인스턴스"}`;
+  const cmp = document.getElementById("cmp");
+  cmp.textContent = `비교 ${sset.size}` + (S.cmpOnly ? " (해제)" : "");
+  cmp.disabled = sset.size === 0;
+  cmp.classList.toggle("pri", S.cmpOnly);
+
+  document.getElementById("foot").innerHTML =
+    `<button class="btn" id="prev" ${S.page<=1?"disabled":""}>◀</button>
+     <span>${S.page} / ${pages} 페이지 · ${S.per}건씩</span>
+     <button class="btn" id="next" ${S.page>=pages?"disabled":""}>▶</button>`;
+  const pv = document.getElementById("prev"), nx = document.getElementById("next");
+  if (pv) pv.onclick = () => { S.page--; render(); };
+  if (nx) nx.onclick = () => { S.page++; render(); };
+
+  window._export = { rows:out, base:shownBase, price:shownPrice, isStorage };
+}
+
+/* ─────────── CSV ─────────── */
+function csv(){
+  const {rows, base, price, isStorage} = window._export;
+  const pos = poCols();
+  const suffix = `${TERM[S.term]}/${DUR[S.dur].l}/${S.cur}`;
+  const head = [...base.map(c=>c.t),
+    ...(isStorage ? [] : price.flatMap(v =>
+      pos.map(po => `${v} ${po ? PO[po]+" " : ""}(${suffix})`)))];
+  const line = r => [
+    ...base.map(c => c.price ? (S.cur==="KRW"? r[c.k]*S.fx : r[c.k]) : r[c.k]),
+    ...(isStorage ? [] : price.flatMap(v => pos.map(po => {
+      const p = r.cells?.[v]?.[pkey(S.term, po)];
+      if (p == null) return "";
+      const m = money(p);
+      return S.cur==="KRW" ? Math.round(m) : m.toFixed(6);
+    })))
+  ].map(v => { v = v==null?"":String(v); return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v; }).join(",");
+  const blob = new Blob(["﻿"+head.join(",")+"\n"+rows.map(line).join("\n")],
+                        {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `aws-${S.view}-seoul-${S.term}-${S.dur}.csv`;
+  a.click();
+}
+
+/* ══════════════ 데이터 갱신 ══════════════
+   scripts/collect_prices.py 와 동일한 규칙을 브라우저에서 수행한다.
+   · engineCode 400번대 → RDS Custom
+   · databaseEdition '*-BYOM' → 에디션 병합 + 라이선스 BYOM
+   · licenseModel 공백은 요금 설명문/engineCode 로 보정
+   · RI: 1yr·3yr × No/Partial/All Upfront 실효 시간단가 (선결제 ÷ 약정시간)
+   · 언번들 세대에서 LI 단가 == BYOM 단가 → 라이선스 별도 청구(licSep)     */
+const REGION = "ap-northeast-2";
+const BULK = svc => `https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/${svc}/current/${REGION}/index.json`;
+const UNBUNDLED = ["m7i","r7i","m8i","r8i","m8a","r8a"];
+const RI_MAP = { "1yr|No Upfront":"ri1nu", "1yr|Partial Upfront":"ri1pu", "1yr|All Upfront":"ri1au",
+                 "3yr|No Upfront":"ri3nu", "3yr|Partial Upfront":"ri3pu", "3yr|All Upfront":"ri3au" };
+const LICN = { "License included":"License Included", "Bring your own license":"BYOL",
+               "Bring your own media":"BYOM", "No license required":"No License Required",
+               "NA":"N/A", "":"N/A" };
+const CUSTOM_LIC = { "401":"License Included","402":"License Included","403":"License Included",
+                     "405":"BYOM","406":"BYOM","407":"BYOM" };
+const num = x => { const v = parseFloat(x); return isFinite(v) ? v : null; };
+const isUnbundled = it => {
+  const p = it.split("."); const fam = p.length >= 3 ? p[1] : p[0];
+  return UNBUNDLED.includes(fam);
+};
+
+function dimsHourly(dims){
+  let h = 0, up = 0;
+  for (const k in dims){
+    const d = dims[k];
+    const usd = num(d.pricePerUnit && d.pricePerUnit.USD) || 0;
+    const unit = (d.unit || "").toLowerCase();
+    if (unit === "quantity") up += usd;
+    else if (unit === "hrs" || unit === "hours" || unit === "hour") h += usd;
+  }
+  return [h, up];
+}
+
+function priceMatrix(terms, sku){
+  const out = {}; let desc = [];
+  const od = (terms.OnDemand || {})[sku] || {};
+  for (const t in od){
+    const dims = od[t].priceDimensions || {};
+    for (const k in dims) if (dims[k].description) desc.push(dims[k].description);
+    const [h] = dimsHourly(dims);
+    if (h > 0 && (out.od == null || h < out.od)) out.od = +h.toFixed(6);
+  }
+  const rv = (terms.Reserved || {})[sku] || {};
+  for (const t in rv){
+    const a = rv[t].termAttributes || {};
+    if (a.OfferingClass !== "standard") continue;
+    const key = RI_MAP[`${a.LeaseContractLength}|${a.PurchaseOption}`];
+    if (!key) continue;
+    const yrs = a.LeaseContractLength === "3yr" ? 3 : 1;
+    const [h, up] = dimsHourly(rv[t].priceDimensions || {});
+    const eff = h + up / (yrs * 365 * 24);
+    if (eff > 0 && (out[key] == null || eff < out[key])) out[key] = +eff.toFixed(6);
+  }
+  return [out, desc.join(" ")];
+}
+
+function classify(a, desc){
+  const code = String(a.engineCode || "").trim();
+  const n = parseInt(code, 10);
+  const product = isFinite(n) && n >= 400 ? "RDS Custom" : "RDS";
+  let lic = LICN[(a.licenseModel || "").trim()] ?? (a.licenseModel || "N/A");
+  if (lic === "N/A"){
+    const d = desc.toLowerCase();
+    if (d.includes("customer-provided media") || d.includes("(byom)") || d.includes("bring your own media")) lic = "BYOM";
+    else if (d.includes("aws-provided") || d.includes("(li)") || d.includes("license included")) lic = "License Included";
+    else lic = CUSTOM_LIC[code] || lic;
+  }
+  return [product, lic];
+}
+
+function parseRDS(data){
+  const P = data.products || {}, T = data.terms || {};
+  const inst = new Map(), storage = [];
+  const STOR = ["Database Storage","Provisioned IOPS","Provisioned Throughput","Storage Snapshot",
+                "System Operation","Performance Insights","RDSProxy","ServerlessV2","Serverless"];
+  for (const sku in P){
+    const p = P[sku], a = p.attributes || {}, fam = p.productFamily || "";
+    if (fam === "Database Instance"){
+      const it = (a.instanceType || "").trim();
+      if (!it.startsWith("db.")) continue;
+      const [pm, desc] = priceMatrix(T, sku);
+      if (pm.od == null) continue;
+      let ed = (a.databaseEdition || "").trim(), byom = false;
+      if (ed.endsWith("-BYOM")){ ed = ed.slice(0, -5); byom = true; }
+      let [product, lic] = classify(a, desc);
+      if (byom) lic = "BYOM";
+      const eng = (a.databaseEngine || "").trim();
+      const dep = (a.deploymentOption || "").trim();
+      const key = [product, eng, ed || "-", lic, dep, it].join("|");
+      let row = inst.get(key);
+      if (!row){
+        row = { sku, instanceType:it, family: it.split(".").length >= 3 ? it.split(".")[1] : "",
+                product, engine:eng, edition: ed || "-", license:lic, deployment:dep,
+                vcpu: Math.round(num(a.vcpu) || 0), memory:(a.memory||"").trim(),
+                processor:(a.physicalProcessor||"").trim(), network:(a.networkPerformance||"").trim(),
+                usagetype:(a.usagetype||"").trim(), unbundled:isUnbundled(it) };
+        inst.set(key, row);
+      }
+      for (const k in pm) if (row[k] == null || pm[k] < row[k]) row[k] = pm[k];
+    } else if (STOR.includes(fam)){
+      let ed = (a.databaseEdition || "").trim();
+      if (ed.endsWith("-BYOM")) ed = ed.slice(0, -5);
+      const od = (T.OnDemand || {})[sku] || {};
+      for (const t in od){
+        const dims = od[t].priceDimensions || {};
+        for (const k in dims){
+          const usd = num(dims[k].pricePerUnit && dims[k].pricePerUnit.USD);
+          if (!usd) continue;
+          storage.push({ sku, family:fam,
+            type: a.volumeType || a.storageMedia || a.group || "-",
+            engine: a.databaseEngine || "-", edition: ed || "-",
+            deployment: a.deploymentOption || "-", unit: dims[k].unit || "",
+            price: usd, desc: dims[k].description || "" });
+        }
+      }
+    }
+  }
+  // 라이선스 별도 청구 판정: 같은 스펙에서 LI 단가 == BYOM 단가
+  const grp = new Map();
+  for (const r of inst.values()){
+    const k = [r.product, r.engine, r.edition, r.deployment, r.instanceType].join("|");
+    if (!grp.has(k)) grp.set(k, {});
+    grp.get(k)[r.license] = r;
+  }
+  for (const g of grp.values()){
+    const li = g["License Included"], bm = g["BYOM"];
+    if (!li || !bm || li.od == null || bm.od == null) continue;
+    if (Math.abs(li.od - bm.od) < 1e-9){
+      for (const r of [li, bm]){ r.licSep = true; if (r.c_od == null) r.c_od = r.od; }
+    }
+  }
+  const rows = [...inst.values()];
+  rows.sort((x,y) => x.engine.localeCompare(y.engine) || x.edition.localeCompare(y.edition)
+        || x.license.localeCompare(y.license) || x.vcpu - y.vcpu || x.od - y.od);
+  return { rds: rows, storage };
+}
+
+function parseEC2(data){
+  const P = data.products || {}, T = data.terms || {};
+  const rows = new Map();
+  for (const sku in P){
+    const p = P[sku], a = p.attributes || {};
+    const fam = p.productFamily || "";
+    if (fam !== "Compute Instance" && fam !== "Compute Instance (bare metal)") continue;
+    if (a.capacitystatus !== "Used") continue;
+    if (a.tenancy !== "Shared" && a.tenancy !== "Dedicated") continue;
+    const [pm] = priceMatrix(T, sku);
+    if (pm.od == null) continue;
+    const it = (a.instanceType || "").trim();
+    const lic = LICN[(a.licenseModel || "").trim()] ?? (a.licenseModel || "N/A");
+    const key = [a.operatingSystem, lic, a.preInstalledSw, a.tenancy, it].join("|");
+    let row = rows.get(key);
+    if (!row){
+      row = { sku, instanceType:it, family: it.includes(".") ? it.split(".")[0] : it,
+              os: a.operatingSystem || "", license: lic, preSw: a.preInstalledSw || "NA",
+              tenancy: a.tenancy || "", vcpu: Math.round(num(a.vcpu) || 0),
+              memory: (a.memory||"").trim(), processor:(a.physicalProcessor||"").trim(),
+              network:(a.networkPerformance||"").trim(), usagetype:(a.usagetype||"").trim() };
+      rows.set(key, row);
+    }
+    for (const k in pm) if (row[k] == null || pm[k] < row[k]) row[k] = pm[k];
+  }
+  const out = [...rows.values()];
+  out.sort((x,y) => x.os.localeCompare(y.os) || x.license.localeCompare(y.license)
+        || x.vcpu - y.vcpu || x.od - y.od);
+  return { ec2: out };
+}
+
+/* 파일/응답 JSON 한 덩어리를 받아 어떤 데이터인지 판별하고 반영 */
+function ingest(json, hintName){
+  const applied = [];
+  const stamp = () => {
+    S.meta = Object.assign({}, S.meta, {
+      updatedAt: new Date().toISOString(), region: REGION,
+      source: "AWS Price List Bulk API (브라우저에서 갱신)",
+      notCollected: (S.meta.notCollected || []).filter(x => !applied.includes(x)),
+    });
+  };
+
+  if (json && json.products && json.terms){          // AWS 원본 가격표
+    const svc = (json.offerCode || "").toLowerCase();
+    const looksEc2 = svc.includes("ec2") ||
+      Object.values(json.products).some(p => (p.productFamily||"").startsWith("Compute Instance"));
+    if (looksEc2){
+      const { ec2 } = parseEC2(json);
+      S.raw.ec2 = ec2; applied.push("ec2");
+    } else {
+      const { rds, storage } = parseRDS(json);
+      S.raw.rds = rds; S.raw.storage = storage; applied.push("rds", "storage");
+    }
+  } else if (Array.isArray(json)){                    // 이 도구가 만든 JSON
+    const s = json[0] || {};
+    const name = (hintName || "").toLowerCase();
+    if (s.os || name.includes("ec2")){ S.raw.ec2 = json; applied.push("ec2"); }
+    else if (s.unit || s.price != null || name.includes("storage")){ S.raw.storage = json; applied.push("storage"); }
+    else { S.raw.rds = json; applied.push("rds"); }
+  } else if (json && json.updatedAt){                 // meta.json
+    S.meta = json; applied.push("meta");
+  } else {
+    throw new Error("알 수 없는 형식의 JSON 입니다");
+  }
+  if (applied.some(a => a !== "meta")) stamp();
+  for (const v of applied) if (v !== "meta") S.raw[v] = S.raw[v];
+  S.hidden = {}; S.sel = {}; S.page = 1;
+  return applied;
+}
+
+/* 진행 중인 갱신을 중단하기 위한 컨트롤러 */
+let dlCtl = null;
+/* 전체 진행 상황 표시: 단계(1/2), 서비스, 상태, 진행률, 경과 시간 */
+const DL = { step:0, steps:2, t0:0, pct:0, phase:"" };
+function setProgress(kind, phase, pct){
+  if (kind) DL.phase = `${kind.toUpperCase()} ${phase}`;
+  if (pct != null) DL.pct = pct;
+  const overall = ((DL.step - 1) + (DL.pct / 100)) / DL.steps * 100;
+  const bar = document.getElementById("dlall_bar");
+  if (bar) bar.style.width = Math.max(0, Math.min(100, overall)).toFixed(1) + "%";
+  const el = document.getElementById("dlall_stat");
+  const sec = DL.t0 ? ((Date.now() - DL.t0) / 1000).toFixed(0) + "초 경과" : "";
+  // 진행 중일 때만 상태줄을 갱신한다 (종료 후에는 요약 문구를 유지)
+  if (el && dlCtl && DL.step)
+    el.textContent = `${DL.step}/${DL.steps} · ${DL.phase} · 전체 ${overall.toFixed(0)}%` +
+                     (sec ? " · " + sec : "");
+  const btn = document.getElementById("refresh");
+  if (btn) btn.textContent = dlCtl ? `갱신 중 ${overall.toFixed(0)}%` : "데이터 갱신";
+}
+
+async function tryDownload(kind, statusEl, signal){
+  const svc = kind === "ec2" ? "AmazonEC2" : "AmazonRDS";
+  const url = BULK(svc);
+  statusEl.innerHTML = `<span class="prog"><i style="width:8%"></i></span><span> 요청 중…</span>`;
+  const bar = () => statusEl.querySelector(".prog i");
+  setProgress(kind, "요청 중", 0);
+  try {
+    const res = await fetch(url, { mode: "cors", signal });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const total = +(res.headers.get("Content-Length") || 0);
+    const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+    let text;
+    if (reader){
+      const chunks = []; let got = 0;
+      for (;;){
+        if (signal && signal.aborted) throw new DOMException("중단됨", "AbortError");
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value); got += value.length;
+        const est = kind === "ec2" ? 1.2e8 : 2e7;
+        const pct = total ? Math.min(99, got / total * 100) : Math.min(95, got / est * 100);
+        if (bar()) bar().style.width = pct + "%";
+        const mbTxt = `${(got/1048576).toFixed(1)} MB${total ? " / " + (total/1048576).toFixed(1) + " MB" : ""}`;
+        if (statusEl.lastChild) statusEl.lastChild.textContent = ` 받는 중 ${mbTxt}`;
+        setProgress(kind, `받는 중 ${mbTxt}`, pct);
+      }
+      text = new TextDecoder("utf-8").decode(await new Blob(chunks).arrayBuffer());
+    } else {
+      text = await res.text();
+    }
+    if (bar()) bar().style.width = "100%";
+    const mb = (text.length / 1048576).toFixed(1);
+    statusEl.innerHTML = `<span>${mb} MB 수신 · 파싱 중…</span>`;
+    setProgress(kind, `파싱 중 (${mb} MB)`, 99);
+    await new Promise(r => setTimeout(r, 30));
+    const applied = ingest(JSON.parse(text), kind);
+    statusEl.innerHTML = `<span class="ok">완료</span>` +
+      `<span> ${mb} MB · ${applied.filter(a=>a!=="meta")
+        .map(a => `${a.toUpperCase()} ${(S.raw[a]||[]).length.toLocaleString()}행`).join(" · ")}</span>`;
+    setProgress(kind, "완료", 100);
+    afterRefresh();
+    return true;
+  } catch (e){
+    if (e.name === "AbortError"){
+      statusEl.innerHTML = `<span class="mnote">중단됨</span>`;
+      setProgress(kind, "중단됨", DL.pct);
+    } else {
+      setProgress(kind, "실패", DL.pct);
+      statusEl.innerHTML =
+        `<span class="err">실패</span> <span>(${e.message}) — ` +
+        `AWS 서버가 브라우저 직접 요청을 허용하지 않는 경우입니다. 아래 방법 2·3을 이용하세요.</span>`;
+    }
+    return false;
+  }
+}
+
+/* RDS → EC2 순차 갱신 (한번에 받기) */
+async function refreshAll(){
+  if (dlCtl) return;                       // 이미 진행 중
+  dlCtl = new AbortController();
+  const all  = document.getElementById("dlall");
+  const stop = document.getElementById("dlstop");
+  all.disabled = true; all.textContent = "받는 중…";
+  stop.style.display = "";
+  DL.step = 0; DL.steps = 2; DL.pct = 0; DL.t0 = Date.now();
+  document.querySelector(".modal").classList.add("busy");   // 진행 중엔 방법 1만 표시
+  const timer = setInterval(() => setProgress(null, null, null), 1000);
+  const results = {};
+  try {
+    for (const kind of ["rds", "ec2"]){
+      if (dlCtl.signal.aborted) break;
+      DL.step += 1; DL.pct = 0;
+      setProgress(kind, "시작", 0);
+      results[kind] = await tryDownload(kind, document.getElementById("dlstat_" + kind), dlCtl.signal);
+    }
+  } finally {
+    clearInterval(timer);
+    const done = Object.entries(results).filter(([,v]) => v).map(([k]) => k.toUpperCase());
+    const failed = Object.entries(results).filter(([,v]) => !v).map(([k]) => k.toUpperCase());
+    all.disabled = false;
+    all.textContent = done.length ? "다시 받기" : "RDS + EC2 한번에 받기";
+    stop.style.display = "none";
+    dlCtl = null;
+    const sec = ((Date.now() - DL.t0) / 1000).toFixed(0);
+    const el = document.getElementById("dlall_stat");
+    if (el) el.innerHTML = done.length
+      ? `<span class="ok">${done.join(" + ")} 갱신 완료</span> · ${sec}초 소요` +
+        (failed.length ? ` · <span class="err">${failed.join(", ")} 실패</span>` : "")
+      : `<span class="err">갱신되지 않았습니다</span> · 아래 방법 2·3을 이용하세요`;
+    const bar = document.getElementById("dlall_bar");
+    if (bar && !failed.length && done.length) bar.style.width = "100%";
+    setProgress(null, null, null);
+    document.getElementById("refresh").textContent = "데이터 갱신";
+
+    // 특이사항 없이 전부 성공하면 잠시 결과를 보여준 뒤 자동으로 닫는다.
+    const clean = done.length === DL.steps && !failed.length;
+    const modal = document.querySelector(".modal");
+    if (clean){
+      const rows = ["rds","ec2"].map(k =>
+        `${k.toUpperCase()} ${(S.raw[k]||[]).length.toLocaleString()}행`).join(" · ");
+      setTimeout(() => {
+        document.getElementById("modalbg").classList.remove("on");
+        modal.classList.remove("busy");
+        toast(`데이터 갱신 완료 · ${rows} · ${sec}초 소요`);
+      }, 1200);
+    } else {
+      // 실패·중단이면 창을 유지하고 나머지 방법을 다시 노출
+      modal.classList.remove("busy");
+    }
+  }
+}
+
+function afterRefresh(){
+  document.getElementById("savestep").style.display = "block";
+  const nc = (S.meta.notCollected || []);
+  document.getElementById("upd").textContent =
+    "갱신 " + new Date(S.meta.updatedAt).toLocaleString("ko-KR") +
+    (/SAMPLE/i.test(S.meta.source||"") ? " · ⚠ 샘플 데이터" : "") +
+    (nc.length ? ` · ⚠ ${nc.join(", ").toUpperCase()} 미수집` : "");
+  document.getElementById("banner").style.display = "none";
+  switchView(S.view);
+}
+
+let toastTid = null;
+function toast(msg, ms){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastTid);
+  toastTid = setTimeout(() => t.classList.remove("on"), ms || 4000);
+}
+
+function currentPayload(){
+  return { rds: S.raw.rds || [], ec2: S.raw.ec2 || [],
+           storage: S.raw.storage || [], meta: S.meta || {} };
+}
+function download(name, text, type){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function saveStandalone(){
+  const blob = JSON.stringify(currentPayload()).replace(/<\//g, "<\\/");
+  const doc = document.documentElement.cloneNode(true);
+  // 갱신 모달은 그대로 두고, 삽입된 데이터만 교체
+  const sc = [...doc.querySelectorAll("script")].find(s => /window\.__DATA__\s*=/.test(s.textContent));
+  if (sc) sc.textContent = "window.__DATA__ = " + blob + ";";
+  download("aws-price-board-standalone.html",
+    "<!DOCTYPE html>\n" + doc.outerHTML, "text/html;charset=utf-8");
+}
+
+/* ─────────── 뷰 전환 / 초기화 ─────────── */
+async function switchView(v){
+  S.view = v; S.page = 1; S.cmpOnly = false;
+  S.sort = v === "storage" ? {k:"family",dir:1} : {k:"vcpu",dir:1};
+  document.querySelectorAll(".navtab").forEach(t =>
+    t.setAttribute("aria-selected", String(t.dataset.view === v)));
+  hiddenSet(); selSet();
+  const rows = await load(v);
+  if (v !== "storage" && !S.hidden[v].size){
+    S.hidden[v].add("processor");
+    // Outposts 전용 엔진 열은 기본 숨김 (컬럼 메뉴에서 켤 수 있음)
+    for (const r of rows){
+      const name = v === "rds" ? variantRDS(r) : variantEC2(r);
+      if (/outpost/i.test(name)) S.hidden[v].add("p:" + name);
+    }
+  }
+  buildSettings();
+  render();
+  document.getElementById("note").innerHTML = v === "storage"
+    ? `RDS 스토리지·Provisioned IOPS·백업 스냅샷 단가. 단위는 각 행의 <b>단위</b> 열을 확인하세요.`
+    : `각 행은 인스턴스 타입 1개, 각 열은 ${v==="rds"?"DB 엔진·에디션":"운영체제"}별 단가입니다.
+       열 이름의 <b>LI</b>는 License Included, <b>BYOL</b>·<b>BYOM</b>은 각각 자체 라이선스·자체 미디어입니다.
+       라이선스 모델별 단가를 별도 열로 나란히 비교할 수 있고, 위의 <b>라이선스 모델</b>에서
+       특정 모델만 남길 수도 있습니다. RI는 Standard 클래스이며 선결제 금액을 약정 기간으로 분할한
+       <b>실효 시간단가</b>입니다. 셀에 마우스를 올리면 온디맨드 대비 절감률이 표시됩니다.
+       <b style="color:var(--warn,#c2410c)">*</b> 표시는 <b>라이선스 요금이 별도 청구</b>되는 스펙입니다
+       (m7i·r7i·m8i·r8i 등 언번들 세대 — AWS가 라이선스 단가를 가격표에 공표하지 않으므로
+       표시된 값은 라이선스 제외 컴퓨팅 상당액입니다).
+       <b>–</b> 는 AWS가 해당 조건의 요금을 공표하지 않은 경우입니다.
+       월 비용은 730시간, 연 비용은 8760시간 기준. 실제 청구액은 사용량·약정·할인 계약에 따라 달라집니다.
+       출처: AWS Price List Bulk API(공개 데이터).`;
+}
+
+(async function init(){
+  try{
+    S.meta = (window.__DATA__ && window.__DATA__.meta)
+           || await (await fetch("data/meta.json")).json();
+    const nc = (S.meta.notCollected || []);
+    document.getElementById("upd").textContent =
+      "갱신 " + new Date(S.meta.updatedAt).toLocaleString("ko-KR") +
+      (/SAMPLE/i.test(S.meta.source||"") ? " · ⚠ 샘플 데이터" : "") +
+      (nc.length ? ` · ⚠ ${nc.join(", ").toUpperCase()} 미수집` : "");
+  }catch{ document.getElementById("upd").textContent = "데이터 확인 필요"; }
+
+  document.querySelectorAll(".navtab").forEach(t => t.onclick = () => switchView(t.dataset.view));
+
+  const q = document.getElementById("q");
+  let tid; q.oninput = () => { clearTimeout(tid); tid = setTimeout(() => {
+    S.q = q.value; S.page = 1; render(); }, 160); };
+
+  document.getElementById("colbtn").onclick = e => {
+    e.stopPropagation(); document.getElementById("colbox").classList.toggle("on"); };
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".pop")) document.getElementById("colbox").classList.remove("on"); });
+
+  document.getElementById("csv").onclick = csv;
+
+  /* ── 갱신 모달 배선 ── */
+  const bg = document.getElementById("modalbg");
+  const dlstat = document.getElementById("dlstat");
+  const filestat = document.getElementById("filestat");
+  /* '데이터 갱신' → 창을 열고 곧바로 RDS + EC2 순차 수집 시작 */
+  document.getElementById("refresh").onclick = () => {
+    bg.classList.add("on");
+    refreshAll();
+  };
+  document.getElementById("dlall").onclick = refreshAll;
+  document.getElementById("dlstop").onclick = () => { if (dlCtl) dlCtl.abort(); };
+  document.getElementById("mclose").onclick = () => bg.classList.remove("on");
+  bg.onclick = e => { if (e.target === bg) bg.classList.remove("on"); };
+  document.addEventListener("keydown", e => { if (e.key === "Escape") bg.classList.remove("on"); });
+
+  // 개별 받기 (재활용을 위해 유지)
+  document.querySelectorAll("[data-dl]").forEach(b =>
+    b.onclick = () => tryDownload(b.dataset.dl, dlstat, dlCtl ? dlCtl.signal : undefined));
+
+  async function readFiles(files){
+    const names = [];
+    for (const f of files){
+      filestat.innerHTML = `<span class="mnote">${f.name} 읽는 중… (${(f.size/1048576).toFixed(1)} MB)</span>`;
+      await new Promise(r => setTimeout(r, 20));
+      try {
+        const applied = ingest(JSON.parse(await f.text()), f.name);
+        names.push(`${f.name} → ${applied.join(", ").toUpperCase()}`);
+      } catch (err){
+        filestat.innerHTML = `<span class="err">${f.name}: ${err.message}</span>`;
+        return;
+      }
+    }
+    filestat.innerHTML = `<span class="ok">반영 완료</span> <span class="mnote">${names.join(" · ")}</span>`;
+    afterRefresh();
+  }
+  document.getElementById("fileinput").onchange = e => readFiles([...e.target.files]);
+
+  const drop = document.getElementById("drop");
+  ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.add("hot"); }));
+  ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => {
+    e.preventDefault(); drop.classList.remove("hot"); }));
+  drop.addEventListener("drop", e => {
+    const fs = [...(e.dataTransfer.files || [])].filter(f => /\.json$/i.test(f.name));
+    if (fs.length) readFiles(fs);
+    else filestat.innerHTML = `<span class="err">JSON 파일만 지원합니다</span>`;
+  });
+
+  document.getElementById("copycmd").onclick = async () => {
+    const t = document.getElementById("cmd").textContent;
+    try { await navigator.clipboard.writeText(t); }
+    catch { const ta = document.createElement("textarea"); ta.value = t;
+            document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+    const b = document.getElementById("copycmd");
+    b.textContent = "복사됨"; setTimeout(() => b.textContent = "명령 복사", 1400);
+  };
+  document.getElementById("savehtml").onclick = saveStandalone;
+  document.getElementById("savejson").onclick = () => {
+    const p = currentPayload();
+    download("rds.json", JSON.stringify(p.rds), "application/json");
+    setTimeout(() => download("ec2.json", JSON.stringify(p.ec2), "application/json"), 300);
+    setTimeout(() => download("rds_storage.json", JSON.stringify(p.storage), "application/json"), 600);
+    setTimeout(() => download("meta.json", JSON.stringify(p.meta), "application/json"), 900);
+  };
+  document.getElementById("cmp").onclick = () => { S.cmpOnly = !S.cmpOnly; S.page = 1; render(); };
+  document.getElementById("clear").onclick = () => {
+    S.q = ""; q.value = ""; S.sel[S.view] = new Set(); S.cmpOnly = false;
+    S.hidden[S.view] = new Set(); S.page = 1;
+    S.term = "od"; S.dur = "hour"; S.lic = "all"; S.deploy = "Single-AZ"; S.product = "RDS";
+    buildSettings(); render();
+  };
+
+  await switchView("rds");
+})();
+</script>
+</body>
+</html>

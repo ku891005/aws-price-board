@@ -1,0 +1,6 @@
+__pycache__/
+.DS_Store
+_cache/
+collect_log.txt
+*.xlsx
+/aws-price-board-standalone.html
