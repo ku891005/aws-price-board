@@ -320,6 +320,9 @@ def build_rds(data):
                      "Storage Snapshot", "System Operation", "Performance Insights",
                      "RDSProxy", "ServerlessV2", "Serverless"):
             ed, byom = split_byom(a.get("databaseEdition"))
+            # Single-AZ 기준만 보관 (Multi-AZ 는 통상 2배)
+            if "multi-az" in (a.get("deploymentOption") or "").lower():
+                continue
             for t in (terms.get("OnDemand", {}).get(sku) or {}).values():
                 for d in (t.get("priceDimensions") or {}).values():
                     usd = _num((d.get("pricePerUnit") or {}).get("USD"))
@@ -414,6 +417,42 @@ def build_ec2(data):
                 row[k] = v
     log(f"[EC2] 인스턴스 {len(rows):,}행")
     return list(rows.values())
+
+
+# ──────────────────────────── EBS (EC2 스토리지) ────────────────────────────
+EBS_FAMILIES = ("Storage", "System Operation", "Provisioned Throughput",
+                "Storage Snapshot", "Fast Snapshot Restore")
+
+
+def build_ebs(data):
+    """EC2 가격표에서 EBS 볼륨·IOPS·처리량·스냅샷 요금 추출."""
+    products, terms = data.get("products", {}), data.get("terms", {})
+    rows = []
+    for sku, p in products.items():
+        a = p.get("attributes", {})
+        fam = p.get("productFamily") or ""
+        if fam not in EBS_FAMILIES:
+            continue
+        for t in (terms.get("OnDemand", {}).get(sku) or {}).values():
+            for d in (t.get("priceDimensions") or {}).values():
+                usd = _num((d.get("pricePerUnit") or {}).get("USD"))
+                if not usd:
+                    continue
+                rows.append({
+                    "sku": sku, "family": fam,
+                    "type": (a.get("volumeApiName") or a.get("volumeType")
+                             or a.get("group") or "-"),
+                    "volumeType": a.get("volumeType") or "-",
+                    "media": a.get("storageMedia") or "-",
+                    "unit": d.get("unit", ""), "price": usd,
+                    "maxIops": _num(a.get("maxIopsvolume")),
+                    "maxThroughput": a.get("maxThroughputvolume") or "-",
+                    "usagetype": (a.get("usagetype") or "").strip(),
+                    "desc": d.get("description", ""),
+                })
+    rows.sort(key=lambda r: (r["family"], str(r["type"]), r["price"]))
+    log(f"[EBS] 스토리지 요금 {len(rows):,}행")
+    return rows
 
 
 # ──────────────────────────── 출력 ────────────────────────────
@@ -582,11 +621,14 @@ def main():
     log(f"  캐시  {args.cache_dir}")
     log("=" * 70)
 
-    rds_rows, rds_storage, ec2_rows = [], [], []
+    rds_rows, rds_storage, ec2_rows, ebs_rows = [], [], [], []
     if "rds" in svcs:
         rds_rows, rds_storage = build_rds(fetch("rds", region, args.cache_dir, args.refresh))
     if "ec2" in svcs:
-        ec2_rows = build_ec2(fetch("ec2", region, args.cache_dir, args.refresh))
+        ec2_data = fetch("ec2", region, args.cache_dir, args.refresh)
+        ec2_rows = build_ec2(ec2_data)
+        ebs_rows = build_ebs(ec2_data)
+        del ec2_data
 
     rds_rows.sort(key=lambda r: (r["engine"], r["edition"], r["license"], r["vcpu"], r["od"]))
     ec2_rows.sort(key=lambda r: (r["os"], r["license"], r["vcpu"], r["od"]))
@@ -597,6 +639,7 @@ def main():
         write_json("rds_storage.json", rds_storage)
     if "ec2" in svcs:
         write_json("ec2.json", ec2_rows)
+        write_json("ebs.json", ebs_rows)
     sampled = [s for s in ("rds", "ec2") if s not in svcs
                and os.path.isfile(os.path.join(OUT_DIR, f"{s}.json"))]
     if sampled:
@@ -607,7 +650,8 @@ def main():
         "notCollected": sampled,
         "updatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "hoursPerMonth": HOURS, "unbundled": list(UNBUNDLED),
-        "counts": {"rds": len(rds_rows), "ec2": len(ec2_rows), "rdsStorage": len(rds_storage)},
+        "counts": {"rds": len(rds_rows), "ec2": len(ec2_rows),
+                   "rdsStorage": len(rds_storage), "ebs": len(ebs_rows)},
         "source": "AWS Price List Bulk API (public)",
     })
 

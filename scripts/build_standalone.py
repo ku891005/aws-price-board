@@ -70,14 +70,15 @@ def main():
     print("[수집] docs/data/*.json")
     payload = {}
     for key, name in (("rds", "rds.json"), ("ec2", "ec2.json"),
-                      ("storage", "rds_storage.json"), ("meta", "meta.json")):
+                      ("storage", "rds_storage.json"), ("ebs", "ebs.json"),
+                      ("meta", "meta.json")):
         d = load(name)
         if d is not None:
             payload[key] = d
             n = len(d) if isinstance(d, list) else "-"
             print(f"  {name}: {n}행")
 
-    if not any(k in payload for k in ("rds", "ec2", "storage")):
+    if not any(k in payload for k in ("rds", "ec2", "storage", "ebs")):
         raise SystemExit("[오류] 삽입할 데이터가 없습니다. 먼저 collect_prices.py 를 실행하세요.")
 
     blob = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

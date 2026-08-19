@@ -157,6 +157,7 @@
   <span class="navtab" role="tab" data-view="rds" aria-selected="true">RDS</span>
   <span class="navtab" role="tab" data-view="ec2" aria-selected="false">EC2</span>
   <span class="navtab" role="tab" data-view="storage" aria-selected="false">RDS 스토리지</span>
+  <span class="navtab" role="tab" data-view="ebs" aria-selected="false">EC2 스토리지</span>
   <span class="sp"></span>
   <span class="upd" id="upd"></span>
 </div>
@@ -280,6 +281,8 @@ const TERM = { od:"온디맨드", ri1:"RI 1년 (Standard)", ri3:"RI 3년 (Standa
 const PO      = { nu:"No Upfront", pu:"Partial Upfront", au:"All Upfront" };
 const PO_KEYS = ["nu", "pu", "au"];
 /* 데이터 필드 키: 온디맨드는 od, RI는 ri1nu / ri3au ... */
+const FLAT = ["storage", "ebs"];            // 피벗하지 않는 단순 목록 뷰
+const isFlat = v => FLAT.includes(v || S.view);
 const pkey = (term, po) => term === "od" ? "od" : term + po;
 const poCols = () => S.term === "od" ? [""] : PO_KEYS;
 /* 라이선스 모델을 열 이름에 포함시켜 어느 것도 가려지지 않게 한다 */
@@ -348,7 +351,8 @@ function variantEC2(r){
 }
 
 /* ─────────── 데이터 로드 & 피벗 ─────────── */
-const FILE = { rds:"data/rds.json", ec2:"data/ec2.json", storage:"data/rds_storage.json" };
+const FILE = { rds:"data/rds.json", ec2:"data/ec2.json",
+               storage:"data/rds_storage.json", ebs:"data/ebs.json" };
 
 async function load(view){
   if (S.raw[view]) return S.raw[view];
@@ -369,6 +373,15 @@ async function load(view){
 
 function showLoadError(view, e){
   const isFile = location.protocol === "file:";
+  // 단일 파일인데 해당 데이터셋만 없는 경우 = 아직 수집되지 않음
+  if (window.__DATA__ && !window.__DATA__[view]){
+    document.getElementById("banner").innerHTML =
+      `<b>${view.toUpperCase()} 데이터가 아직 수집되지 않았습니다.</b><br>` +
+      `오른쪽 위 <b>데이터 갱신</b> 을 누르면 AWS 가격표에서 받아 채웁니다.` +
+      (view === "ebs" ? ` (EC2 가격표에 함께 들어 있습니다)` : "");
+    document.getElementById("banner").style.display = "block";
+    return;
+  }
   document.getElementById("banner").innerHTML =
     `<b>데이터를 불러올 수 없습니다</b> (${FILE[view]} · ${e.message})<br>` +
     (isFile
@@ -448,8 +461,15 @@ function pivot(){
 function baseCols(){
   if (S.view === "storage") return [
     {k:"family", t:"구분"}, {k:"type", t:"타입"}, {k:"engine", t:"엔진"},
-    {k:"deployment", t:"배포"}, {k:"price", t:"단가", num:true, price:true, raw:true},
+    {k:"price", t:"단가", num:true, price:true, raw:true},
     {k:"unit", t:"단위"}, {k:"desc", t:"설명"},
+  ];
+  if (S.view === "ebs") return [
+    {k:"family", t:"구분"}, {k:"type", t:"타입", cls:"api"}, {k:"volumeType", t:"볼륨 종류"},
+    {k:"media", t:"미디어"},
+    {k:"price", t:"단가", num:true, price:true, raw:true}, {k:"unit", t:"단위"},
+    {k:"maxIops", t:"최대 IOPS", num:true}, {k:"maxThroughput", t:"최대 처리량"},
+    {k:"desc", t:"설명"},
   ];
   const c = [
     {k:"name",      t:"Name", cls:"name", sticky:true},
@@ -519,7 +539,7 @@ function buildSettings(){
   let h = `<div class="fld"><label>리전</label>
       <select disabled><option>서울 (ap-northeast-2)</option></select></div>`;
 
-  if (S.view !== "storage"){
+  if (!isFlat()){
     h += sel("t_term","요금 조건",TERM,S.term);
     h += sel("t_dur","비용 기간",Object.fromEntries(Object.entries(DUR).map(([k,v])=>[k,v.l])),S.dur);
     if (S.view === "rds"){
@@ -562,12 +582,15 @@ function buildColBox(cols, priceCols){
 }
 
 function render(){
-  const isStorage = S.view === "storage";
+  const isStorage = isFlat();
   const allBase = baseCols();
   let rows, pcols = [];
 
   if (isStorage){
-    rows = (S.raw.storage || []).map(r => ({...r, key:r.sku}));
+    rows = (S.raw[S.view] || []).map(r => ({...r, key:r.sku}));
+    // RDS 스토리지는 Single-AZ 기준만 노출 (Multi-AZ 는 통상 2배)
+    if (S.view === "storage")
+      rows = rows.filter(r => !/multi-az/i.test(r.deployment || ""));
   } else {
     const p = pivot();
     rows = p.rows;
@@ -832,6 +855,7 @@ function parseRDS(data){
         for (const k in dims){
           const usd = num(dims[k].pricePerUnit && dims[k].pricePerUnit.USD);
           if (!usd) continue;
+          if (/multi-az/i.test(a.deploymentOption || "")) continue;   // Single-AZ 기준만 보관
           storage.push({ sku, family:fam,
             type: a.volumeType || a.storageMedia || a.group || "-",
             engine: a.databaseEngine || "-", edition: ed || "-",
@@ -892,6 +916,41 @@ function parseEC2(data){
   return { ec2: out };
 }
 
+/* EC2 가격표에서 EBS(스토리지) 요금 추출 */
+const EBS_FAMILIES = ["Storage", "System Operation", "Provisioned Throughput",
+                      "Storage Snapshot", "Fast Snapshot Restore"];
+function parseEBS(data){
+  const P = data.products || {}, T = data.terms || {};
+  const rows = [];
+  for (const sku in P){
+    const p = P[sku], a = p.attributes || {};
+    if (!EBS_FAMILIES.includes(p.productFamily || "")) continue;
+    const od = (T.OnDemand || {})[sku] || {};
+    for (const t in od){
+      const dims = od[t].priceDimensions || {};
+      for (const k in dims){
+        const usd = num(dims[k].pricePerUnit && dims[k].pricePerUnit.USD);
+        if (!usd) continue;
+        rows.push({
+          sku, family: p.productFamily,
+          type: a.volumeApiName || a.volumeType || a.group || "-",
+          volumeType: a.volumeType || "-",
+          media: a.storageMedia || "-",
+          unit: dims[k].unit || "",
+          price: usd,
+          maxIops: num(a.maxIopsvolume) ,
+          maxThroughput: a.maxThroughputvolume || "-",
+          usagetype: a.usagetype || "",
+          desc: dims[k].description || "",
+        });
+      }
+    }
+  }
+  rows.sort((x,y) => (x.family||"").localeCompare(y.family||"")
+        || String(x.type).localeCompare(String(y.type)) || x.price - y.price);
+  return { ebs: rows };
+}
+
 /* 파일/응답 JSON 한 덩어리를 받아 어떤 데이터인지 판별하고 반영 */
 function ingest(json, hintName){
   const applied = [];
@@ -909,7 +968,8 @@ function ingest(json, hintName){
       Object.values(json.products).some(p => (p.productFamily||"").startsWith("Compute Instance"));
     if (looksEc2){
       const { ec2 } = parseEC2(json);
-      S.raw.ec2 = ec2; applied.push("ec2");
+      const { ebs } = parseEBS(json);
+      S.raw.ec2 = ec2; S.raw.ebs = ebs; applied.push("ec2", "ebs");
     } else {
       const { rds, storage } = parseRDS(json);
       S.raw.rds = rds; S.raw.storage = storage; applied.push("rds", "storage");
@@ -917,7 +977,10 @@ function ingest(json, hintName){
   } else if (Array.isArray(json)){                    // 이 도구가 만든 JSON
     const s = json[0] || {};
     const name = (hintName || "").toLowerCase();
-    if (s.os || name.includes("ec2")){ S.raw.ec2 = json; applied.push("ec2"); }
+    if (s.os || name.includes("ec2") && !name.includes("ebs")){ S.raw.ec2 = json; applied.push("ec2"); }
+    else if (s.volumeType !== undefined || s.media !== undefined || name.includes("ebs")){
+      S.raw.ebs = json; applied.push("ebs");
+    }
     else if (s.unit || s.price != null || name.includes("storage")){ S.raw.storage = json; applied.push("storage"); }
     else { S.raw.rds = json; applied.push("rds"); }
   } else if (json && json.updatedAt){                 // meta.json
@@ -1084,7 +1147,7 @@ function toast(msg, ms){
 
 function currentPayload(){
   return { rds: S.raw.rds || [], ec2: S.raw.ec2 || [],
-           storage: S.raw.storage || [], meta: S.meta || {} };
+           storage: S.raw.storage || [], ebs: S.raw.ebs || [], meta: S.meta || {} };
 }
 function download(name, text, type){
   const a = document.createElement("a");
@@ -1105,12 +1168,12 @@ function saveStandalone(){
 /* ─────────── 뷰 전환 / 초기화 ─────────── */
 async function switchView(v){
   S.view = v; S.page = 1; S.cmpOnly = false;
-  S.sort = v === "storage" ? {k:"family",dir:1} : {k:"vcpu",dir:1};
+  S.sort = isFlat(v) ? {k:"family",dir:1} : {k:"vcpu",dir:1};
   document.querySelectorAll(".navtab").forEach(t =>
     t.setAttribute("aria-selected", String(t.dataset.view === v)));
   hiddenSet(); selSet();
   const rows = await load(v);
-  if (v !== "storage" && !S.hidden[v].size){
+  if (!isFlat(v) && !S.hidden[v].size){
     S.hidden[v].add("processor");
     // Outposts 전용 엔진 열은 기본 숨김 (컬럼 메뉴에서 켤 수 있음)
     for (const r of rows){
@@ -1121,7 +1184,12 @@ async function switchView(v){
   buildSettings();
   render();
   document.getElementById("note").innerHTML = v === "storage"
-    ? `RDS 스토리지·Provisioned IOPS·백업 스냅샷 단가. 단위는 각 행의 <b>단위</b> 열을 확인하세요.`
+    ? `RDS 스토리지·Provisioned IOPS·백업 스냅샷 단가입니다. <b>Single-AZ 기준</b>만 표시하며
+       (Multi-AZ 는 통상 2배), 단위는 각 행의 <b>단위</b> 열을 확인하세요.`
+    : v === "ebs"
+    ? `EC2 에 붙이는 EBS 볼륨 단가입니다. gp3·gp2·io1·io2·st1·sc1·magnetic 볼륨 요금과
+       프로비저닝 IOPS·처리량, 스냅샷 요금을 포함합니다. 단위는 각 행의 <b>단위</b> 열을 확인하세요
+       (GB-Mo = GB 당 월 요금).`
     : `각 행은 인스턴스 타입 1개, 각 열은 ${v==="rds"?"DB 엔진·에디션":"운영체제"}별 단가입니다.
        열 이름의 <b>LI</b>는 License Included, <b>BYOL</b>·<b>BYOM</b>은 각각 자체 라이선스·자체 미디어입니다.
        라이선스 모델별 단가를 별도 열로 나란히 비교할 수 있고, 위의 <b>라이선스 모델</b>에서

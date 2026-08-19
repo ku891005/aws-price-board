@@ -24,7 +24,8 @@ _cache/                    가격표 원본 캐시 (git 제외)
 |---|---|---|
 | RDS | `db.r6g.2xlarge` 등 인스턴스 타입 | MySQL · PostgreSQL · MariaDB · Aurora MySQL/PostgreSQL · SQL Server Express/Web/Standard/Enterprise · Oracle Standard Two/Enterprise · Db2 |
 | EC2 | `m6i.xlarge` 등 인스턴스 타입 | Linux · Windows · RHEL · SUSE · Ubuntu Pro |
-| RDS 스토리지 | 스토리지/IOPS 항목 | gp2/gp3/io1, Provisioned IOPS·Throughput, 백업 스냅샷 |
+| RDS 스토리지 | 스토리지/IOPS 항목 | gp2/gp3/io1, Provisioned IOPS·Throughput, 백업 스냅샷 (**Single-AZ 기준만**) |
+| EC2 스토리지 | EBS 항목 | gp3·gp2·io1·io2·st1·sc1·magnetic 볼륨, 프로비저닝 IOPS·처리량, 스냅샷, FSR |
 
 **설정 바** (Vantage와 동일한 축)
 
@@ -192,6 +193,16 @@ python scripts/collect_prices.py --region ap-northeast-1
   `$1.05/h`, RI No-Up 1yr `$0.9923/h` — 기존 엑셀 값과 일치 확인.
 - `RI No-Up 1yr BYOM` 은 기존 스크립트에서 0건이었으나, RDS Custom 분류·라이선스 보정 후
   **36건** 수집됩니다.
+
+### 산출 파일
+
+| 파일 | 내용 |
+|---|---|
+| `docs/data/rds.json` | RDS 인스턴스 단가 |
+| `docs/data/rds_storage.json` | RDS 스토리지·IOPS·스냅샷 (Single-AZ 기준만 수집) |
+| `docs/data/ec2.json` | EC2 인스턴스 단가 |
+| `docs/data/ebs.json` | EBS 볼륨·IOPS·처리량·스냅샷 (EC2 가격표에서 추출) |
+| `docs/data/meta.json` | 리전·수집 시각·행 수 |
 
 ### 데이터 스키마 (`docs/data/rds.json`)
 
